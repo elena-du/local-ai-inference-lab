@@ -1,0 +1,13 @@
+name: same-model-template
+description: Duplicate and use genuinely equivalent model family/quantization artifacts.
+comparison_kind: same-model
+output: results/same-model.jsonl
+samples: 5
+warmups: 1
+experiments:
+  - runtime: llama-cpp
+    model: llama_example
+    workload: chat
+  - runtime: ort-genai
+    model: ort_genai_example
+    workload: chat

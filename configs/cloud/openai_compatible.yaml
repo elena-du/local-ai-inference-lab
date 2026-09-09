@@ -1,0 +1,5 @@
+contract: OpenAI-compatible chat completions
+base_url_env: LOCAL_AI_LAB_CLOUD_BASE_URL
+api_key_env: LOCAL_AI_LAB_CLOUD_API_KEY
+model_env: LOCAL_AI_LAB_CLOUD_MODEL
+timing_warning: Client-observed latency includes network transport and service overhead.

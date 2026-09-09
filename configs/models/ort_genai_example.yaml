@@ -1,0 +1,5 @@
+id: replace-with-ort-genai-model-id
+family: replace-with-model-family
+format: ONNX GenAI directory
+quantization: unknown
+path: C:\models\replace-me

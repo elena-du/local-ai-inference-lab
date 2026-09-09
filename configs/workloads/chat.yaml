@@ -1,0 +1,13 @@
+id: chat
+name: Short chat
+task: generative
+system_prompt: Answer concisely and factually.
+prompt: Explain the difference between an API and a runtime in two sentences.
+generation:
+  max_output_tokens: 96
+  temperature: 0.0
+  top_p: 1.0
+  seed: 42
+checks:
+  - type: contains
+    value: API

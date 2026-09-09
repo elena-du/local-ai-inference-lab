@@ -1,0 +1,12 @@
+id: multi-turn
+name: Multi-turn conversation
+task: generative
+system_prompt: "Conversation so far: User asked what ONNX is. Assistant said it is a model representation."
+prompt: Now contrast ONNX with an execution provider in no more than three sentences.
+generation:
+  max_output_tokens: 120
+  temperature: 0.0
+  seed: 42
+checks:
+  - type: contains
+    value: execution provider

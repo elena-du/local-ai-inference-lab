@@ -1,0 +1,4 @@
+id: replace-with-provider-model-id
+family: provider-specific
+format: provider-managed
+quantization: unknown

@@ -1,0 +1,7 @@
+id: image-classification
+name: Image classification tensor example
+task: non-generative
+prompt: This workload is a configuration placeholder; use run_tensors with model-specific preprocessing.
+generation:
+  max_output_tokens: 0
+checks: []

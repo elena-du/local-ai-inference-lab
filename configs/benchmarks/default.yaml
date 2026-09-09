@@ -1,0 +1,13 @@
+name: default
+description: Edit model IDs before running. Different model configs imply same-task, not same-model.
+comparison_kind: same-task
+output: results/benchmark.jsonl
+samples: 5
+warmups: 1
+experiments:
+  - runtime: llama-cpp
+    model: llama_example
+    workload: chat
+  - runtime: cloud
+    model: cloud_example
+    workload: chat

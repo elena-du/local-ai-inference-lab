@@ -1,0 +1,4 @@
+id: example_nvidia
+description: Replace expectations with the target machine; discovery remains authoritative.
+architecture: x64
+expected_devices: [CPU, NVIDIA GPU]

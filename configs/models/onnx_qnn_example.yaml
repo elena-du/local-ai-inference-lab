@@ -1,0 +1,9 @@
+id: replace-with-static-qdq-model-id
+family: non-generative-example
+format: ONNX
+quantization: int8-qdq
+path: C:\models\replace-me.qdq.onnx
+provider: QNNExecutionProvider
+provider_options:
+  backend_type: htp
+  disable_cpu_fallback: true

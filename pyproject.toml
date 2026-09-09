@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "local-ai-inference-lab"
+version = "0.1.0"
+description = "Evidence-first learning and benchmarking for Windows local and cloud AI inference"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+  "httpx>=0.27,<1",
+  "psutil>=6,<8",
+  "pyyaml>=6,<7",
+  "rich>=13,<15",
+  "typer>=0.12,<1",
+]
+
+[project.optional-dependencies]
+onnx = ["numpy>=1.26", "onnxruntime>=1.20"]
+genai = ["onnxruntime-genai>=0.15"]
+foundry = ["foundry-local-sdk-winml"]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+local-ai-lab = "local_ai_lab.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/local_ai_lab"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

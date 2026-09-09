@@ -1,0 +1,14 @@
+id: summarization
+name: Summarization
+task: generative
+prompt: >-
+  Summarize in one sentence: An inference application prepares input, tokenizes or
+  tensors it, invokes a runtime, and the runtime schedules model operations through
+  a hardware backend. Generative systems then sample tokens while maintaining a KV cache.
+generation:
+  max_output_tokens: 80
+  temperature: 0.0
+  seed: 42
+checks:
+  - type: max_length
+    value: 500

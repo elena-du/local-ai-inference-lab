@@ -1,0 +1,11 @@
+id: structured-json
+name: Structured JSON generation
+task: generative
+prompt: Return JSON only with string keys "api", "runtime", and "backend", each containing a one-line definition.
+generation:
+  max_output_tokens: 160
+  temperature: 0.0
+  seed: 42
+checks:
+  - type: json
+    required_keys: [api, runtime, backend]

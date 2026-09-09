@@ -1,0 +1,5 @@
+id: replace-with-gguf-model-id
+family: replace-with-model-family
+format: GGUF
+quantization: replace-with-quantization
+path: null

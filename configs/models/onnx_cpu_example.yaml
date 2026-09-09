@@ -1,0 +1,6 @@
+id: replace-with-onnx-model-id
+family: non-generative-example
+format: ONNX
+quantization: fp32
+path: C:\models\replace-me.onnx
+provider: CPUExecutionProvider

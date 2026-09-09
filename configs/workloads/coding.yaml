@@ -1,0 +1,11 @@
+id: coding
+name: Coding task
+task: generative
+prompt: Write a Python function named median that returns the median of a non-empty list of floats. Return code only.
+generation:
+  max_output_tokens: 128
+  temperature: 0.0
+  seed: 42
+checks:
+  - type: contains
+    value: "def median"

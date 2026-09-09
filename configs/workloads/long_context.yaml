@@ -1,0 +1,18 @@
+id: long-context
+name: Long-context reasoning
+task: generative
+prompt: >-
+  Read the following repeated facts and return only the final code word. Fact 1: APIs
+  are developer surfaces. Fact 2: runtimes execute models. Fact 3: execution providers
+  connect runtimes to hardware. Fact 4: model formats are artifacts, not processors.
+  Fact 5: hardware presence is not execution evidence. Fact 6: cloud client latency
+  includes transport. Fact 7: prefill processes prompt tokens. Fact 8: decode produces
+  output tokens. Fact 9: KV caches retain attention state. Fact 10: the code word is
+  EVIDENCE. What is the code word?
+generation:
+  max_output_tokens: 24
+  temperature: 0.0
+  seed: 42
+checks:
+  - type: contains
+    value: EVIDENCE

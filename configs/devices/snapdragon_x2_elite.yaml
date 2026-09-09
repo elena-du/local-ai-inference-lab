@@ -1,0 +1,9 @@
+id: snapdragon_x2_elite_reference
+description: Reference expectations only; run `hardware` for observed facts.
+os: Windows 11
+architecture: ARM64
+cpu_family: Snapdragon X2 Elite
+expected_devices:
+  - Qualcomm Adreno GPU
+  - Qualcomm Hexagon NPU
+warning: Device presence never proves workload placement.
