@@ -87,6 +87,31 @@ For QNN qualification, use a static-shape quantized QDQ model and disable CPU fa
 
 ORT GenAI is a preview optional extra. Foundry Local is pre-release and may expose a native SDK or an in-process OpenAI-compatible endpoint. `doctor` explains which surface is available. Do not install conflicting Foundry SDK variants in one environment.
 
+Use isolated environments for native runtime distributions:
+
+```powershell
+# Direct ORT + ORT GenAI
+.\.venv\Scripts\python.exe -m pip install -e ".[onnx,genai,dev]"
+
+# Windows ML (uses onnxruntime-windowsml instead of the direct ORT wheel)
+py -3.12 -m venv .venv-winml
+.\.venv-winml\Scripts\python.exe -m pip install -e ".[winml]"
+.\.venv-winml\Scripts\python.exe -m local_ai_lab doctor
+
+# Foundry Local (pins its own native core)
+py -3.12 -m venv .venv-foundry
+.\.venv-foundry\Scripts\python.exe -m pip install -e ".[foundry]"
+.\.venv-foundry\Scripts\python.exe -m local_ai_lab doctor
+```
+
+An installed Foundry SDK provides model lifecycle management, but this lab's benchmark adapter also requires its OpenAI-compatible endpoint:
+
+```powershell
+$env:LOCAL_AI_LAB_FOUNDRY_BASE_URL = "http://127.0.0.1:<reported-port>/v1"
+```
+
+Use the port reported by the Foundry Local process; do not assume a fixed port.
+
 ## Benchmarking
 
 ```powershell
