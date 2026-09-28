@@ -58,7 +58,7 @@ python -m local_ai_lab doctor
 
 `doctor` reports two different kinds of information:
 
-- Windows-reported OS and hardware presence; and
+- OS details and hardware detected by Windows; and
 - readiness of each optional inference path in the active Python environment.
 
 Your exact device names and readiness results will differ. A shortened example
@@ -88,18 +88,18 @@ Interpret this example as follows:
 
 - `GPU present` and `NPU present` are **observed hardware presence** reported by
   Windows.
-- `READY onnx-runtime` means the ONNX Runtime Python package is importable in
-  this environment.
+- `READY onnx-runtime` means this Python environment can load ONNX Runtime. It
+  does not mean that a model has run.
 - `Available EPs: CPUExecutionProvider` means this ONNX Runtime installation
   currently exposes only its CPU execution provider.
 - The GPU and NPU can exist even when ORT exposes only the CPU EP. Accelerators
   require compatible drivers and provider-specific software.
-- `READY` does not mean that a model has run.
 - `UNAVAILABLE` is not a failure for this lesson. Most runtimes are optional,
   and different runtime distributions may require separate virtual
   environments.
 
-Do not install every optional runtime just to make every line say `READY`.
+Optional runtimes may remain `UNAVAILABLE`; they are not required to complete
+this lesson.
 
 ## Step 2: Record the hardware snapshot
 
@@ -136,8 +136,8 @@ The command prints JSON and saves the same snapshot to
 This output is evidence that the operating system reported those devices. It
 does not identify which device an inference runtime selected.
 
-If your output has no GPU or NPU entry, record that absence. Do not invent an
-accelerator or treat its absence as a lesson failure.
+A missing GPU or NPU entry is a valid result and does not prevent lesson
+completion.
 
 ## Step 3: Classify the evidence
 
@@ -154,14 +154,14 @@ Create a small table for your machine. For example:
 | Claim | Classification | Evidence |
 |---|---|---|
 | Windows reports a GPU | Observed | `GPU` entry in `hardware` output |
-| Windows reports an NPU | Observed, or unknown if absent | `NPU` entry in `hardware` output |
+| Windows reports an NPU | Observed if listed; otherwise not observed by this command | `NPU` entry in `hardware` output |
 | ONNX Runtime is installed | Observed | `READY onnx-runtime` |
 | ORT can see the CPU EP | Observed | `Available EPs: CPUExecutionProvider` |
 | ORT can use the NPU | Unknown | NPU presence alone is insufficient |
 | A model ran on the GPU or NPU | Unknown | No model was run in this lesson |
 
-Be precise: a device can be **present** while an EP is unavailable, and an EP
-can be **available** while a model still runs partly or entirely on the CPU.
+Hardware detection, EP availability, and actual operator execution are three
+separate observations.
 
 ## Troubleshooting
 

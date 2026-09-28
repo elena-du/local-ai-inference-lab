@@ -129,7 +129,8 @@ python -m local_ai_lab explain <inference-path>
 
 Each result has five important sections:
 
-1. **PATH** - layers from your application down to the model.
+1. **PATH** - the software and hardware layers involved, plus the model artifact
+   they load.
 2. **YOU CONTROL** - choices exposed directly to your code.
 3. **RUNTIME CONTROLS** - decisions delegated to runtime software.
 4. **WINDOWS CONTROLS** - decisions delegated to the operating system.
@@ -140,10 +141,8 @@ The responsibility table gives more detail about ownership. The line
 `ACTUAL EXECUTION DEVICE: unknown / runtime-managed` is intentional: describing
 an architecture does not prove which device executed a real model.
 
-The path also names the model artifact or representation. This is not meant to
-suggest that a model is physically "after" the hardware. The runtime loads the
-model, and the diagram includes it so you can see who supplies it and in what
-format.
+The diagram also lists the model artifact to show its format and owner; the
+runtime loads that artifact before execution.
 
 ## Step 1: Inspect a high-level API
 
@@ -247,8 +246,8 @@ ACTUAL EXECUTION DEVICE: unknown / runtime-managed
 
 ### Where ONNX Runtime fits
 
-Foundry Local Core **uses ONNX Runtime internally**, but the two are not
-synonyms:
+Foundry Local Core orchestrates model lifecycle and generation; it calls ONNX
+Runtime to execute ONNX graphs:
 
 ```text
 Foundry Local Core
@@ -269,8 +268,9 @@ Core.
 
 ### Two Foundry Local Python variants
 
-Foundry Local provides two Python packages. They expose the same high-level
-Foundry Local API, but use different native runtime distributions:
+Foundry Local provides two Python packages. They expose the same high-level API
+but install different native components and manage execution providers
+differently:
 
 | Variant | Python package | Platform | How execution providers are supplied |
 |---|---|---|---|
@@ -325,10 +325,11 @@ EP acquired and registered by Windows ML
 CPU, GPU, or NPU
 ```
 
-Windows ML is the Windows-specific platform layer. It discovers compatible
-hardware EPs, acquires and registers them, and coordinates runtime and driver
-compatibility. This path is useful when a Windows application needs
-Windows-managed access to vendor CPU, GPU, or NPU acceleration.
+Windows ML is the Windows-specific platform layer. It discovers EPs compatible
+with the machine's hardware, acquires and registers them, and coordinates
+runtime and driver compatibility. This path is useful when a Windows
+application needs Windows-managed access to vendor CPU, GPU, or NPU
+acceleration.
 
 In both paths, Foundry Local Core still manages the catalog model, tokenization,
 generation, and lifecycle. ORT still executes the model graph. The difference
@@ -375,7 +376,8 @@ Interpretation:
 - ONNX Runtime is still part of the stack, but your application does not create
   and configure a raw ORT session.
 - Windows ML participates in EP discovery and registration.
-- The actual hardware remains unknown until runtime evidence demonstrates it.
+- The actual device remains unknown until a measured run reports provider or
+  device usage.
 
 The readiness section may say `UNAVAILABLE` if the Foundry Local SDK or endpoint
 is not configured. Do not install it merely to complete this comparison.
@@ -508,8 +510,9 @@ load and execute ONNX models.
 
 ### "I selected an EP, so the model ran entirely on its device"
 
-No. Provider selection is configured intent. Runtime session reports, profiling,
-and fallback checks are needed to establish what executed where.
+No. Selecting a provider records what the application requested; session
+reports, profiling, and fallback checks are needed to show what actually
+executed.
 
 ### "A higher-level API is always better"
 

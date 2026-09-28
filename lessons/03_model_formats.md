@@ -3,20 +3,23 @@
 To run inference, a runtime needs a concrete model artifact: files containing the model's learned weights, computation structure, metadata, and sometimes tokenizer or generation
 configuration.
 
-A **model format** defines how those artifacts are represented. The format helps
-determine which runtimes can load the model, but it is not a runtime, execution
-provider, or hardware device.
+A **model format** defines how model data and metadata are organized in files.
+The format helps determine which runtimes can load the model, but it is not a
+runtime, execution provider, or hardware device.
 
 ## Goals
 
 By the end of this lesson, you should be able to:
 
 1. distinguish a model family, model artifact, format, and configuration;
-2. explain the main roles of ONNX, an ONNX GenAI model directory, and GGUF;
-3. identify which runtime in this lab consumes each format;
-4. explain why a format does not prove which device will execute a model;
-5. explain what quantization changes; and
-6. decide whether two model artifacts can support a fair performance comparison.
+2. explain serialization and identify what a saved artifact preserves;
+3. distinguish a tensor/weight container from a complete model package;
+4. explain the main roles of Safetensors, ONNX, an ONNX GenAI model directory,
+   and GGUF;
+5. identify which runtime in this lab consumes each deployment format;
+6. explain why a format does not prove which device will execute a model;
+7. explain what quantization changes; and
+8. decide whether two model artifacts can support a fair performance comparison.
 
 This lesson inspects configuration templates. It does not download or run a
 model.
@@ -85,6 +88,72 @@ flowchart LR
 The runtime loads the model artifact. The backend or EP maps supported
 operations to hardware.
 
+## Serialization and model packages
+
+### What serialization means
+
+During execution, a framework holds a model in memory as objects and tensors.
+That in-memory state disappears when the process ends. **Serialization** writes
+selected state into a persistent byte representation, usually one or more files.
+**Deserialization** reads that representation and reconstructs usable state in a
+program.
+
+Different serialization formats preserve different things:
+
+| Serialized content | What it preserves | What is still needed |
+|---|---|---|
+| Weights only | Named parameter tensors | Matching architecture implementation and configuration |
+| Training checkpoint | Weights plus optimizer and training state | Matching framework code and configuration |
+| Graph model | Operations, tensor connections, inputs/outputs, and usually weights | A compatible graph runtime |
+| Complete model package | Coordinated configuration, weights, tokenizer, and other assets | A compatible framework or runtime |
+
+The filename extension does not answer these questions by itself. To understand
+a model artifact, identify what was serialized and which software knows how to
+deserialize and execute it.
+
+Source frameworks commonly keep model code, configuration, and learned weights
+as separate pieces. Some serialization formats can cause the loading program to
+execute code chosen by the file creator. A malicious file could therefore run
+unwanted commands on the machine. Only load such files from trusted sources.
+The framework-specific checkpoint conventions are outside the scope of this
+lesson.
+
+### Safetensors
+
+**Safetensors** is a tensor-storage format. It records named tensors, their data
+types, shapes, numeric data, and limited metadata. The format can be used by
+multiple framework ecosystems; it is not specific to PyTorch, GGUF, or
+llama.cpp.
+
+Safetensors is safer than Pickle because its loading process reads tensor data
+and metadata without invoking functions selected by the file creator.
+
+A Safetensors file usually contains weights, not the operations that use those
+weights. A typical downloadable language-model package might be:
+
+```text
+model-package\
+|-- config.json
+|-- tokenizer.json
+|-- tokenizer_config.json
+|-- model.safetensors
+`-- generation_config.json
+```
+
+| Package component | Purpose |
+|---|---|
+| Architecture configuration | Identifies the model type, dimensions, layers, and options |
+| Tokenizer files | Define how text maps to and from token IDs |
+| Safetensors file | Stores the learned parameter tensors |
+| Generation configuration | Provides default search, sampling, and stopping settings |
+| Compatible framework implementation | Constructs the operations that consume the weights |
+
+The weights become useful only when paired with the matching architecture,
+configuration, and other required assets. Safer weight loading does not
+establish that the complete package is trustworthy, correctly licensed,
+compatible, or behaviorally safe. Source, checksums, configuration, and
+accompanying code still require review.
+
 ## The formats used in this lab
 
 ### ONNX
@@ -134,12 +203,11 @@ interface used by the application. For large models, initializer data can live
 in a separate external data file referenced by the ONNX file. **Blue** identifies
 the ONNX artifact and graph concepts throughout this lesson.
 
-ONNX is designed for runtime portability, but portability is not automatic.
-Compatibility still depends on:
+ONNX can support portability across compatible runtimes, but every operator,
+shape, and data type must still be supported. Compatibility also depends on:
 
-- the ONNX opset and operators used by the graph;
-- tensor data types and shapes;
-- runtime and EP support for those operators;
+- the ONNX opset used by the graph;
+- runtime and EP capabilities;
 - preprocessing and postprocessing expected by the model; and
 - any graph transformations required by the target provider.
 
@@ -147,9 +215,8 @@ In this lab, direct ONNX models are consumed by **ONNX Runtime (ORT)**.
 
 ### ONNX GenAI model directory
 
-A generative model needs more than one tensor evaluation. It also needs language
-model behavior such as tokenization, repeated decoding, sampling, and KV-cache
-management.
+Generating text requires repeated model executions plus tokenization, token
+selection, state management, and text decoding.
 
 An ONNX GenAI artifact is therefore represented as a **directory** rather than
 just one `.onnx` path. Depending on the model, the directory can contain:
@@ -161,74 +228,222 @@ just one `.onnx` path. Depending on the model, the directory can contain:
 - runtime-specific configuration.
 
 ```mermaid
-flowchart LR
+flowchart TB
     PROMPT["Prompt text"]
 
-    subgraph DIRECTORY["ONNX GenAI model directory"]
-        TOKENIZER["Tokenizer files<br/>text and token conversion"]
-        CONFIG["Generation configuration<br/>model and search settings"]
-        METADATA["Model metadata<br/>architecture and vocabulary details"]
-
-        subgraph ONNX2["model.onnx — same graph structure shown above"]
-            INPUT2["Graph input<br/>input tensor"]
-            WEIGHTS2["Initializers<br/>weights and constants"]
-            MATMUL2["Operation node<br/>MatMul"]
-            ADD2["Operation node<br/>Add"]
-            ACT2["Operation node<br/>Activation"]
-            OUTPUT2["Graph output<br/>logits tensor"]
-
-            INPUT2 -->|"input tensor"| MATMUL2
-            WEIGHTS2 -->|"weight tensor"| MATMUL2
-            WEIGHTS2 -->|"bias tensor"| ADD2
-            MATMUL2 -->|"intermediate tensor"| ADD2
-            ADD2 -->|"intermediate tensor"| ACT2
-            ACT2 -->|"output tensor"| OUTPUT2
-        end
-
-        EXTERNAL2["Optional external data file<br/>large weight tensors"]
-        EXTERNAL2 -.->|"supplies initializer data"| WEIGHTS2
+    subgraph DIRECTORY["Files on disk: ONNX GenAI model directory"]
+        direction LR
+        TOKENIZERFILES["Tokenizer files<br/>vocabulary and token rules"]
+        GENCONFIG["GenAI configuration and metadata<br/>model, search, and stop settings"]
+        ONNXMODEL["ONNX graph and weights<br/>same graph structure shown above"]
     end
 
-    subgraph GENAI["Additional ORT GenAI orchestration"]
-        ENCODE["Encode prompt"]
-        LOOP["Generation loop<br/>prefill and repeated decode"]
-        SAMPLE["Sample next token"]
-        CACHE["Manage KV cache"]
-        DECODE["Decode tokens to text"]
+    subgraph SOFTWARE["Installed runtime components"]
+        direction LR
+        ORTGENAI["ORT GenAI<br/>tokenization, generation loop,<br/>sampling, KV-cache state, decoding"]
+        ORT["ONNX Runtime<br/>graph execution component"]
+        ORTGENAI <-->|"input tensors and state<br/>logits and updated state"| ORT
     end
 
-    ORT["ONNX Runtime<br/>executes graph"]
     RESULT["Generated text"]
 
-    PROMPT --> ENCODE
-    TOKENIZER --> ENCODE
-    CONFIG --> LOOP
-    METADATA --> LOOP
-    ENCODE --> LOOP
-    LOOP -->|"input tensors via ORT"| INPUT2
-    ORT -.->|"executes graph"| MATMUL2
-    OUTPUT2 -->|"logits returned by ORT"| SAMPLE
-    SAMPLE -->|"selected token"| LOOP
-    LOOP <--> CACHE
-    LOOP -->|"finished token sequence"| DECODE
-    TOKENIZER --> DECODE
-    DECODE --> RESULT
+    PROMPT --> ORTGENAI
+    TOKENIZERFILES --> ORTGENAI
+    GENCONFIG --> ORTGENAI
+    ONNXMODEL --> ORT
+    ORTGENAI -->|"completed tokens decoded to text"| RESULT
 
     classDef onnx fill:#dbeafe,stroke:#2563eb,color:#172554,stroke-width:2px
     classDef genai fill:#ffedd5,stroke:#ea580c,color:#431407,stroke-width:2px
-    class INPUT2,WEIGHTS2,MATMUL2,ADD2,ACT2,OUTPUT2,EXTERNAL2,ORT onnx
-    class TOKENIZER,CONFIG,METADATA,ENCODE,LOOP,SAMPLE,CACHE,DECODE genai
-    style ONNX2 fill:#eff6ff,stroke:#2563eb,stroke-width:2px
+    class ONNXMODEL,ORT onnx
+    class TOKENIZERFILES,GENCONFIG,ORTGENAI genai
 ```
 
 In the diagram:
 
-- **Blue boxes repeat the first ONNX visual**: the same graph inputs,
-  initializers, operation nodes, tensor edges, graph output, optional external
-  weights, and ONNX Runtime execution.
-- **Orange boxes** are the additional generative assets and orchestration:
-  tokenization, generation configuration and metadata, prefill/decode looping,
-  sampling, KV-cache management, and conversion back to text.
+- The upper container contains **files on disk**. The ONNX model is the same
+  blue graph structure shown in the first visual. The orange tokenizer and
+  configuration files are additional assets required by the GenAI package.
+- The lower container contains **installed software**. ONNX Runtime is the blue
+  graph-execution component. ORT GenAI is the orange orchestration component
+  built above it.
+- Orange appears in both containers because GenAI needs both persistent assets
+  and runtime behavior. The tokenizer and configuration are files in the model
+  directory; the generation loop, sampling, KV-cache coordination, and decoding
+  are implemented by the installed ORT GenAI runtime.
+
+At runtime:
+
+1. ORT GenAI loads the tokenizer and GenAI configuration and encodes the prompt.
+2. ORT GenAI asks ONNX Runtime to execute the ONNX graph for prefill and decode.
+3. ONNX Runtime returns next-token logits (raw scores for each possible next
+   token) and model state.
+4. ORT GenAI samples a token, carries generation and KV-cache state forward, and
+   repeats graph execution until a stop condition is reached.
+5. ORT GenAI decodes the completed token sequence and returns generated text.
+
+#### What ORT GenAI adds
+
+ORT GenAI coordinates several responsibilities that direct ONNX Runtime leaves
+to the application:
+
+| Responsibility | Input | Work performed | Output |
+|---|---|---|---|
+| Tokenization | Prompt text | Uses the model's tokenizer vocabulary and rules to split text and map pieces to integer IDs | Input token IDs |
+| Generation loop | Input IDs, model state, and generation settings | Runs prefill once, then repeatedly requests one or more decode steps until a stop condition | Sequence of generated token IDs |
+| Sampling | Next-token logits from the model | Applies the selected search strategy and settings to choose the next token | Selected token ID |
+| KV-cache coordination | Attention state produced by the model | Carries reusable attention tensors from one step to the next | Updated state for the following decode step |
+| Text decoding | Completed or streaming token IDs | Uses tokenizer rules to reconstruct text | Generated text |
+
+**Tokenization**
+
+The ONNX graph consumes numeric tensors, not raw text. ORT GenAI loads the
+tokenizer assets distributed with the model and maps a prompt such as:
+
+```text
+Explain why the sky appears blue.
+```
+
+to a model-specific sequence of integer token IDs:
+
+```text
+[101, 7632, 2043, ...]
+```
+
+The numbers are illustrative. Different tokenizers can split the same text
+differently, so the tokenizer must match the model. The application is still
+responsible for constructing the intended prompt or chat template unless its
+chosen model integration supplies that behavior.
+
+**Generation loop**
+
+Text generation is iterative rather than one call that returns a complete
+answer:
+
+1. **Prefill:** the model processes all prompt tokens and produces initial
+   logits and attention state.
+2. **Select:** the generator chooses the next token from the logits.
+3. **Decode step:** the selected token and saved state are passed back through
+   the model to produce the following logits and updated state.
+4. **Repeat:** selection and decode continue until the model emits an end token,
+   the configured token limit is reached, or another stop rule applies.
+
+ORT GenAI owns this control loop and invokes ONNX Runtime for the graph
+executions within it. ONNX Runtime remains responsible for executing and
+optimizing the ONNX graph through its configured execution providers.
+
+**Concrete example: completing a sentence**
+
+Assume the prompt is:
+
+```text
+The capital of France is
+```
+
+The exact token IDs and selected output depend on the model and settings. The
+following values are illustrative:
+
+1. **ORT GenAI tokenizes the prompt.**
+
+   ```text
+   "The capital of France is" -> [450, 7483, 315, 9822, 374]
+   ```
+
+2. **ORT GenAI starts prefill.** It supplies tensors such as the prompt token
+   IDs, attention mask, and positions to ONNX Runtime.
+
+3. **ONNX Runtime is engaged here.** It executes the ONNX graph nodes needed for
+   embedding lookup, attention, normalization, and matrix multiplication. The
+   configured EPs map those nodes to supported hardware.
+
+4. **ONNX Runtime returns graph outputs** including next-token logits (raw scores
+   for every token in the vocabulary) and the initial KV-cache tensors.
+
+5. **ORT GenAI samples from the logits** and selects the illustrative token
+   `Paris`.
+
+6. **ORT GenAI starts a decode step.** It passes the token ID for `Paris`,
+   position information, and the saved KV-cache state to ONNX Runtime.
+
+7. **ONNX Runtime is engaged again.** It executes the graph for this new token
+   and returns new logits and updated KV-cache tensors. ORT GenAI might then
+   select `.` and repeat until a stop condition is reached.
+
+8. **ORT GenAI decodes the completed token sequence** and returns:
+
+   ```text
+   The capital of France is Paris.
+   ```
+
+The division of work is:
+
+```text
+ORT GenAI: prompt -> tokens -> generation control -> selected tokens -> text
+                         |
+                         +--> ONNX Runtime: execute graph for prefill
+                         |
+                         +--> ONNX Runtime: execute graph for each decode step
+```
+
+ONNX Runtime is therefore engaged whenever the model graph must be evaluated:
+once for prompt prefill and repeatedly during token generation. It does not
+decide that `Paris` should be selected; it produces the logits from which ORT
+GenAI performs that selection.
+
+**Sampling**
+
+The model returns **logits**, which are scores for possible next tokens. Sampling
+turns those scores into one selected token. Depending on the configured search
+options, selection can use:
+
+- greedy selection, which chooses the highest-scoring token;
+- temperature, which changes how concentrated or varied the choices are;
+- top-k or top-p filtering, which limits the candidate set; and
+- a random seed, which can help make stochastic runs reproducible.
+
+The exact options depend on the ORT GenAI version and model configuration.
+Sampling settings can change both generated text and timing, so comparisons
+should keep them consistent.
+
+**KV-cache state**
+
+Transformer attention uses key and value tensors derived from earlier tokens.
+Recomputing those tensors for the full prompt and all previously generated
+tokens at every step would waste work. A **KV cache** retains the reusable
+attention state:
+
+```text
+Prefill prompt
+    |
+    +--> initial KV cache
+             |
+next token + cache --> decode step --> updated cache
+                                      |
+next token + updated cache --> decode step --> ...
+```
+
+ORT GenAI coordinates the cache inputs and outputs expected by the model across
+generation steps. The exact tensor layout belongs to the exported model and its
+configuration. Cache memory generally grows with active sequence length, making
+context length and concurrent requests important memory considerations.
+
+**Text decoding**
+
+After tokens are selected, the tokenizer converts token IDs back into text.
+This can happen incrementally for streaming output or after generation
+completes.
+
+Two meanings of "decode" appear in generative inference:
+
+- a **model decode step** runs the model to obtain logits for the next token;
+- **tokenizer decoding** converts token IDs into readable text.
+
+They are separate operations even though both commonly use the word "decode."
+
+The boundary remains important: ORT GenAI coordinates the language-generation
+workflow, while ONNX Runtime performs the underlying graph executions. Neither
+layer alone proves which CPU, GPU, or NPU performed those executions; that
+requires provider and profiling evidence.
 
 The difference can be summarized as follows:
 
@@ -264,72 +479,55 @@ A `.gguf` file can include information needed by llama.cpp, such as:
 - tokenizer-related metadata.
 
 ```mermaid
-flowchart LR
+flowchart TB
     PROMPT["Prompt text"]
 
-    subgraph FILE["model.gguf"]
-        HEADER["Header<br/>GGUF version and structure"]
-        MODELMETA["Model metadata<br/>architecture and context"]
+    subgraph FILE["Files on disk: GGUF model container"]
+        direction LR
         TOKENMETA["Tokenizer metadata<br/>vocabulary and token rules"]
-        TENSORINFO["GGUF tensor directory<br/>names, shapes, GGML data types"]
-        TENSORDATA["Tensor data<br/>weights, often quantized"]
+        GGUF_MODEL["GGUF model representation<br/>header, architecture metadata,<br/>tensor directory, and weights"]
     end
 
-    subgraph LLAMA["llama.cpp"]
-        LOAD["Load metadata and tensors"]
-        TOKENIZE["Tokenize prompt"]
-        LOOP["Generation loop<br/>prefill and repeated decode"]
-        EVALUATE["GGML model evaluation"]
-        SAMPLE["Sample next token"]
-        CACHE["Manage KV cache"]
-        DETOKENIZE["Convert tokens to text"]
+    subgraph SOFTWARE["Installed runtime components"]
+        direction LR
+        LLAMA_GEN["llama.cpp generation layer<br/>tokenization, generation loop,<br/>sampling, KV-cache state, decoding"]
+        GGML["llama.cpp / GGML<br/>model execution component"]
+        LLAMA_GEN <-->|"input tensors and state<br/>logits and updated state"| GGML
     end
 
-    BACKEND["llama.cpp backend<br/>CPU, CUDA, Metal, or another built backend"]
-    HARDWARE["Physical device<br/>CPU or supported accelerator"]
     RESULT["Generated text"]
 
-    HEADER --> LOAD
-    MODELMETA --> LOAD
-    TOKENMETA --> TOKENIZE
-    TENSORINFO --> LOAD
-    TENSORDATA --> LOAD
-    PROMPT --> TOKENIZE
-    LOAD --> EVALUATE
-    TOKENIZE --> LOOP
-    LOOP --> EVALUATE
-    EVALUATE --> SAMPLE
-    SAMPLE -->|"selected token"| LOOP
-    LOOP <--> CACHE
-    EVALUATE <--> BACKEND
-    BACKEND <--> HARDWARE
-    LOOP -->|"finished token sequence"| DETOKENIZE
-    TOKENMETA --> DETOKENIZE
-    DETOKENIZE --> RESULT
+    PROMPT --> LLAMA_GEN
+    TOKENMETA --> LLAMA_GEN
+    GGUF_MODEL --> GGML
+    LLAMA_GEN -->|"completed tokens decoded to text"| RESULT
 
     classDef gguf fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:2px
     classDef genai fill:#ffedd5,stroke:#ea580c,color:#431407,stroke-width:2px
-    classDef execution fill:#e5e7eb,stroke:#4b5563,color:#111827,stroke-width:2px
-    class HEADER,MODELMETA,TENSORINFO,TENSORDATA,LOAD,EVALUATE gguf
-    class TOKENMETA,TOKENIZE,LOOP,SAMPLE,CACHE,DETOKENIZE genai
-    class BACKEND,HARDWARE execution
+    class GGUF_MODEL,GGML gguf
+    class TOKENMETA,LLAMA_GEN genai
     style FILE fill:#f0fdf4,stroke:#16a34a,stroke-width:2px
 ```
 
 In the diagram:
 
-- **Orange boxes** are generative concepts corresponding to the orange ONNX
-  GenAI boxes: tokenizer assets, tokenization, the generation loop, sampling,
-  KV-cache management, and conversion back to text.
-- **Green boxes** are specific to the GGUF/llama.cpp path: the GGUF header,
-  architecture metadata, GGML tensor representation, container loading, and
-  GGML model evaluation.
-- **Gray boxes** are the selected llama.cpp backend and physical hardware.
+- The upper container is typically one **GGUF file on disk**; large models can
+  use coordinated shards. Tokenizer metadata is orange because it supports
+  generative orchestration. The remaining model representation is green because
+  it uses GGUF/GGML-specific structures.
+- The lower container is **installed llama.cpp software**. Its orange generation
+  layer corresponds to the orange ORT GenAI layer in the previous visual. Its
+  green GGML model-execution component corresponds functionally to the blue
+  ONNX Runtime component, but uses the GGUF/llama.cpp ecosystem instead.
+- The generation layer passes input tensors and saved state to GGML model
+  execution. It receives logits and updated state, selects tokens, repeats until
+  a stop condition, and then returns generated text.
 
-GGUF keeps model metadata and tensor data in one container. llama.cpp reads that
-container, performs tokenization and generation, and sends computations through
-a backend available in its build. Quantization information belongs to tensors,
-so one GGUF file can contain tensors stored using different GGML data types.
+GGUF keeps model metadata and tensor data in a self-describing container.
+llama.cpp reads that representation, performs tokenization and generation, and
+sends computations through a backend available in its build. Quantization
+information belongs to tensors, so one GGUF file can contain tensors stored
+using different GGML data types.
 
 ### ONNX GenAI and GGUF at the same stages
 
@@ -691,6 +889,10 @@ You are ready for Lesson 4 when all of the following are true:
 - you can identify ONNX Runtime as the expected consumer of direct ONNX, ORT
   GenAI as the consumer of an ONNX GenAI directory, and llama.cpp as the
   consumer of GGUF;
+- you can define serialization and distinguish a weights-only file, training
+  checkpoint, graph model, and coordinated model package;
+- you can explain why Safetensors normally contains weights but requires
+  matching configuration, tokenizer assets, and framework code;
 - you can explain why a YAML configuration is not a model binary;
 - you can explain why ONNX and GGUF are formats rather than hardware devices;
 - you can explain why a configured provider does not prove model execution;
