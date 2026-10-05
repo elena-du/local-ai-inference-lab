@@ -3,9 +3,9 @@
 To run inference, a runtime needs a concrete model artifact: files containing the model's learned weights, computation structure, metadata, and sometimes tokenizer or generation
 configuration.
 
-A **model format** defines how model data and metadata are organized in files.
-The format helps determine which runtimes can load the model, but it is not a
-runtime, execution provider, or hardware device.
+A **model format** defines how those artifacts are represented. The format helps
+determine which runtimes can load the model, but it is not a runtime, execution
+provider, or hardware device.
 
 ## Goals
 
@@ -125,8 +125,9 @@ types, shapes, numeric data, and limited metadata. The format can be used by
 multiple framework ecosystems; it is not specific to PyTorch, GGUF, or
 llama.cpp.
 
-Safetensors is safer than Pickle because its loading process reads tensor data
-and metadata without invoking functions selected by the file creator.
+Safetensors stores tensor data and limited metadata. The format does not provide
+a way for the file creator to include code that runs when the file is loaded.
+This makes it a safer way to share model weights (as opposed to traditional .pickle that can invoke functions selected by the file creator).
 
 A Safetensors file usually contains weights, not the operations that use those
 weights. A typical downloadable language-model package might be:
@@ -203,11 +204,12 @@ interface used by the application. For large models, initializer data can live
 in a separate external data file referenced by the ONNX file. **Blue** identifies
 the ONNX artifact and graph concepts throughout this lesson.
 
-ONNX can support portability across compatible runtimes, but every operator,
-shape, and data type must still be supported. Compatibility also depends on:
+ONNX is designed for runtime portability, but portability is not automatic.
+Compatibility still depends on:
 
-- the ONNX opset used by the graph;
-- runtime and EP capabilities;
+- the ONNX opset and operators used by the graph;
+- tensor data types and shapes;
+- runtime and EP support for those operators;
 - preprocessing and postprocessing expected by the model; and
 - any graph transformations required by the target provider.
 
@@ -215,8 +217,9 @@ In this lab, direct ONNX models are consumed by **ONNX Runtime (ORT)**.
 
 ### ONNX GenAI model directory
 
-Generating text requires repeated model executions plus tokenization, token
-selection, state management, and text decoding.
+A generative model needs more than one tensor evaluation. It also needs language
+model behavior such as tokenization, repeated decoding, sampling, and KV-cache
+management.
 
 An ONNX GenAI artifact is therefore represented as a **directory** rather than
 just one `.onnx` path. Depending on the model, the directory can contain:
